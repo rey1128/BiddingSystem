@@ -40,11 +40,17 @@ public class BidderService extends AbstractVerticle {
 			Gson gson = new Gson();
 			BidRequest bidRequest = gson.fromJson(bidRequestStr, BidRequest.class);
 
-			// get endpoint from EndpointService
+			// get endpoints from EndpointService
 			Single<Message<Object>> consumer = eBus.rxRequest(CommonConstant.BID_ENDPOINT_LIST_ADDRESS,
 					"request from bidderService");
 			consumer.subscribe(succ -> {
 				JsonArray endpointsJson = (JsonArray) succ.body();
+				if (endpointsJson == null || endpointsJson.isEmpty()) {
+					log.info("No available endpoints");
+					hr.reply(Json.encode(replies));
+					return;
+				}
+
 				List<String> endpoints = IntStream.range(0, endpointsJson.size()).mapToObj(endpointsJson::getString)
 						.collect(Collectors.toList());
 
@@ -52,7 +58,7 @@ public class BidderService extends AbstractVerticle {
 				endpoints.forEach(endpoint -> {
 					log.info("send request to endpoint: " + endpoint);
 					WebClient wClient = WebClient.create(vertx);
-					
+
 					Single<HttpResponse<Buffer>> request = wClient.postAbs(endpoint)
 							.putHeader("Content-Type", "application/json").timeout(2000)
 							.rxSendBuffer(Buffer.buffer(Json.encode(bidRequest)));

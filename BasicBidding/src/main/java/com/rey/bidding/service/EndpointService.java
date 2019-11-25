@@ -22,7 +22,7 @@ public class EndpointService extends AbstractVerticle {
 
 		RedisOptions options = new RedisOptions();
 		options.setHost(config().getString(CommonConstant.REDIS_HOST_KEY, "localhost"))
-				.setPort(config().getInteger(CommonConstant.REDIS_PORT_KEY, 6379));
+				.setPort(config().getInteger(CommonConstant.REDIS_PORT_KEY, 6379)).setConnectTimeout(2000);
 
 		initEndpoints(options);
 		listEndpoints(options);
@@ -34,13 +34,17 @@ public class EndpointService extends AbstractVerticle {
 		EventBus eBus = vertx.eventBus();
 		eBus.consumer(CommonConstant.BID_ENDPOINT_LIST_ADDRESS, hr -> {
 			// get endpoints from redis
-			RedisClient.create(vertx, options).smembers(CommonConstant.ENDPOINTS_KEY, res -> {
+			RedisClient.create(vertx, options).ping(ping -> {
+				if (ping.failed()) {
+					log.error("failed to ping redis");
+					hr.reply(getEndpointsFromConfigAsJsonArray());
+				}
+			}).smembers(CommonConstant.ENDPOINTS_KEY, res -> {
 				if (res.succeeded()) {
 					hr.reply(res.result());
 				} else {
-					log.error("error with redis, return endpoints from configurations. Error: " + res.cause());
-					List<String> endpointsConf = Arrays.asList(config().getString(CommonConstant.ENDPOINTS_KEY).split(","));
-					hr.reply(new JsonArray(endpointsConf));
+					log.error("error with redis: " + res.cause());
+					hr.reply(getEndpointsFromConfigAsJsonArray());
 				}
 			});
 		});
@@ -63,5 +67,15 @@ public class EndpointService extends AbstractVerticle {
 				});
 			});
 		});
+	}
+
+	private JsonArray getEndpointsFromConfigAsJsonArray() {
+		log.info("return endpoints from configurations instead");
+		String endpointConf = config().getString(CommonConstant.ENDPOINTS_KEY);
+		if (endpointConf != null) {
+			return new JsonArray(Arrays.asList(endpointConf.split(",")));
+		}
+
+		return null;
 	}
 }

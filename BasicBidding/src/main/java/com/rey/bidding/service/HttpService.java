@@ -94,7 +94,8 @@ public class HttpService extends AbstractVerticle {
 		String requestClient = context.request().remoteAddress().toString();
 		vertx.eventBus().request(CommonConstant.BID_ENDPOINT_LIST_ADDRESS, requestClient, hr -> {
 			if (hr.succeeded()) {
-				context.response().end(hr.result().body().toString());
+				String info = hr.result().body() == null ? "No available endpoints" : hr.result().body().toString();
+				context.response().end(info);
 			} else {
 				context.response().setStatusCode(500).end("Internal Error.");
 			}

@@ -71,7 +71,8 @@ public class EndpointService extends AbstractVerticle {
 
 	private JsonArray getEndpointsFromConfigAsJsonArray() {
 		log.info("return endpoints from configurations instead");
-		String endpointConf = config().getString(CommonConstant.ENDPOINTS_KEY);
+		
+		String endpointConf = String.valueOf(config().getValue(CommonConstant.ENDPOINTS_KEY));
 		if (endpointConf != null && !endpointConf.trim().isEmpty()) {
 			return new JsonArray(Arrays.asList(endpointConf.trim().split(",")));
 		}

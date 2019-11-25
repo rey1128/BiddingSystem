@@ -12,6 +12,8 @@ import com.rey.bidding.model.BidRequest;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.MultiMap;
 import io.vertx.core.Promise;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.Json;
 import io.vertx.core.logging.Logger;
@@ -58,8 +60,10 @@ public class HttpService extends AbstractVerticle {
 		}
 
 		BidRequest request = new BidRequest(id, queryParams);
+		EventBus eBus = vertx.eventBus();
+		DeliveryOptions options = new DeliveryOptions().setSendTimeout(4000);
 		// send to bidder service
-		vertx.eventBus().request(CommonConstant.BID_BIDDER_ADDRESS, Json.encode(request), rh -> {
+		eBus.request(CommonConstant.BID_BIDDER_ADDRESS, Json.encode(request), options, rh -> {
 			if (rh.succeeded()) {
 				// auction
 				Gson gson = new Gson();
@@ -81,7 +85,6 @@ public class HttpService extends AbstractVerticle {
 				} else {
 					context.response().setStatusCode(503).end("Bidder Service not available currently");
 				}
-
 			} else {
 				log.error("error with bid request, error: " + rh.cause());
 				context.response().setStatusCode(500).end("Internal Error.");

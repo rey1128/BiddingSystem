@@ -1,6 +1,7 @@
 package com.rey.bidding.service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -35,10 +36,7 @@ public class BidderService extends AbstractVerticle {
 		EventBus eBus = vertx.eventBus();
 
 		eBus.consumer(CommonConstant.BID_BIDDER_ADDRESS, hr -> {
-			String bidRequestStr = hr.body().toString();
-			List<BidReply> replies = new ArrayList<>();
-			Gson gson = new Gson();
-			BidRequest bidRequest = gson.fromJson(bidRequestStr, BidRequest.class);
+			List<BidReply> replies = Collections.synchronizedList(new ArrayList<BidReply>());
 
 			// get endpoints from EndpointService
 			Single<Message<Object>> consumer = eBus.rxRequest(CommonConstant.BID_ENDPOINT_LIST_ADDRESS,
@@ -53,33 +51,50 @@ public class BidderService extends AbstractVerticle {
 
 				List<String> endpoints = IntStream.range(0, endpointsJson.size()).mapToObj(endpointsJson::getString)
 						.collect(Collectors.toList());
-
-				// send request to each endpoint
-				endpoints.forEach(endpoint -> {
-					log.info("send request to endpoint: " + endpoint);
-					WebClient wClient = WebClient.create(vertx);
-
-					Single<HttpResponse<Buffer>> request = wClient.postAbs(endpoint)
-							.putHeader("Content-Type", "application/json").timeout(2000)
-							.rxSendBuffer(Buffer.buffer(Json.encode(bidRequest)));
-					// reactive handle request
-					request.doOnSuccess(res -> {
-						log.info("successfully with request to endpoint " + endpoint);
-						BidReply reply = gson.fromJson(res.bodyAsString(), BidReply.class);
-						replies.add(reply);
-					}).doOnError(err -> {
-						log.error(String.format("error with request to endpoint: %s, err: %s", endpoint, err));
-						replies.add(null);
-					}).doAfterTerminate(() -> {
-						if (replies.size() >= endpoints.size()) {
-							hr.reply(Json.encode(replies));
-						}
-						wClient.close();
-					}).onErrorReturn(throwable -> {
-						return null;
-					}).subscribe();
-				});
+				sendRequestsToEndpoints(endpoints, replies, hr);
 			});
 		});
+	}
+
+	private void sendRequestsToEndpoints(List<String> endpoints, List<BidReply> replies, Message<Object> hr) {
+		String bidRequestStr = hr.body().toString();
+		Gson gson = new Gson();
+		BidRequest bidRequest = gson.fromJson(bidRequestStr, BidRequest.class);
+		// send request to each endpoint
+		endpoints.forEach(endpoint -> {
+			log.info("send request to endpoint: " + endpoint);
+			WebClient wClient = WebClient.create(vertx);
+			Single<HttpResponse<Buffer>> response = sendHttpRequest(endpoint, bidRequest, wClient);
+			if (response == null) {
+				replies.add(null);
+				return;
+			}
+			// reactive handle request
+			response.doOnSuccess(res -> {
+				log.info("successfully with request to endpoint " + endpoint);
+				BidReply reply = gson.fromJson(res.bodyAsString(), BidReply.class);
+				replies.add(reply);
+			}).doOnError(err -> {
+				log.error(String.format("error with request to endpoint: %s, err: %s", endpoint, err));
+				replies.add(null);
+			}).doAfterTerminate(() -> {
+				if (replies.size() >= endpoints.size()) {
+					hr.reply(Json.encode(replies));
+				}
+				wClient.close();
+			}).onErrorReturn(throwable -> {
+				return null;
+			}).subscribe();
+		});
+	}
+
+	private Single<HttpResponse<Buffer>> sendHttpRequest(String endpoint, BidRequest bidRequest, WebClient wClient) {
+		try {
+			return wClient.postAbs(endpoint).putHeader("Content-Type", "application/json").timeout(2000)
+					.rxSendBuffer(Buffer.buffer(Json.encode(bidRequest)));
+		} catch (Exception e) {
+			log.error(String.format("Error with send http request to %s, error: %s", endpoint, e.getMessage()));
+		}
+		return null;
 	}
 }

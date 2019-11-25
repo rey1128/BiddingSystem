@@ -25,12 +25,11 @@ public class MainVerticle extends AbstractVerticle {
 				new ConfigRetrieverOptions().addStore(fileStore).addStore(envStore));
 		retriever.getConfig(json -> {
 			JsonObject config = json.result();
-
 			// deploy EndpointService and BidderService
 			Promise<String> dbVerticleDeploymentPromise = Promise.promise();
 			vertx.deployVerticle(new EndpointService(), new DeploymentOptions().setConfig(config),
 					dbVerticleDeploymentPromise);
-			vertx.deployVerticle(BidderService.class.getName(), new DeploymentOptions().setConfig(config),
+			vertx.deployVerticle(BidderService.class.getName(), new DeploymentOptions().setInstances(4).setConfig(config),
 					dbVerticleDeploymentPromise);
 			dbVerticleDeploymentPromise.future().compose(id -> {
 				// when successfully, deply HttpService

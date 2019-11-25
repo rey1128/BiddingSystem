@@ -1,0 +1,102 @@
+package com.rey.bidding.service;
+
+import java.util.Comparator;
+import java.util.List;
+
+import com.google.common.reflect.TypeToken;
+import com.google.gson.Gson;
+import com.rey.bidding.commons.CommonConstant;
+import com.rey.bidding.model.BidReply;
+import com.rey.bidding.model.BidRequest;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.MultiMap;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.Json;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
+
+public class HttpService extends AbstractVerticle {
+	private Logger log = LoggerFactory.getLogger(HttpService.class);
+	TypeToken<List<BidReply>> BID_REPLY_LIST = new TypeToken<List<BidReply>>() {
+		private static final long serialVersionUID = -6450375827775578331L;
+	};
+
+	@Override
+	public void start(Promise<Void> startPromise) throws Exception {
+		HttpServer server = vertx.createHttpServer();
+		Router router = Router.router(vertx);
+
+		router.get("/endpoint").handler(this::endpointHandler);
+		router.get("/:id").handler(this::bidHandler);
+		router.get("/*").handler(this::index);
+
+		// start http server
+		int port = config().getInteger(CommonConstant.HTTP_SERVER_PORT_KEY, 8080);
+		server.requestHandler(router).listen(port, ar -> {
+			if (ar.succeeded()) {
+				log.info("http server listening at " + port);
+				startPromise.complete();
+			} else {
+				log.error("Error with starting http server, " + ar.cause());
+				startPromise.fail(ar.cause());
+			}
+		});
+	}
+
+	private void bidHandler(RoutingContext context) {
+		log.info("bid request");
+		// get params from http request
+		String id = context.request().getParam("id");
+		MultiMap queryParams = context.queryParams();
+
+		BidRequest request = new BidRequest(id, queryParams);
+
+		// send to bidder service
+		vertx.eventBus().request(CommonConstant.BID_BIDDER_ADDRESS, Json.encode(request), rh -> {
+			if (rh.succeeded()) {
+				// auction
+				Gson gson = new Gson();
+				List<BidReply> replies = gson.fromJson(rh.result().body().toString(), BID_REPLY_LIST.getType());
+				BidReply reply = replies.stream().filter(r -> r != null).max(new Comparator<BidReply>() {
+					@Override
+					public int compare(BidReply o1, BidReply o2) {
+						int compareBid=o1.getBid().compareTo(o2.getBid());
+						// descending by bid
+						if(compareBid!=0) return compareBid;
+						// asending by content
+						return o2.getContent().compareTo(o1.getContent());		
+					}
+				}).orElse(null);
+				if (reply != null) {
+					context.response().end(reply.toString());
+				} else {
+					context.response().setStatusCode(503).end("Bidder Service not available currently");
+				}
+			} else {
+				System.out.println(rh.cause());
+				log.error("error with bid request, error: " + rh.cause());
+				context.response().setStatusCode(500).end("Internal Error.");
+			}
+		});
+	}
+
+	private void endpointHandler(RoutingContext context) {
+		log.info("list endpoints");
+		String requestClient = context.request().remoteAddress().toString();
+		vertx.eventBus().request(CommonConstant.BID_ENDPOINT_LIST_ADDRESS, requestClient, hr -> {
+			if (hr.succeeded()) {
+				context.response().end(hr.result().body().toString());
+			} else {
+				context.response().setStatusCode(500).end("Internal Error.");
+			}
+		});
+	}
+	
+	private void index(RoutingContext context) {
+		context.response().end("read the docs!");
+	}
+}

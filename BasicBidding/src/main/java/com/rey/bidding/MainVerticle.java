@@ -16,19 +16,16 @@ public class MainVerticle extends AbstractVerticle {
 	@Override
 	public void start(Promise<Void> startPromise) throws Exception {
 
-		// read configurations
-//		ConfigStoreOptions fileStore = new ConfigStoreOptions();
-//		fileStore.setType("file").setConfig(new JsonObject().put("path", "conf/conf.json"));
+		// read configurations, env config will override file config
+		ConfigStoreOptions fileStore = new ConfigStoreOptions();
+		fileStore.setType("file").setConfig(new JsonObject().put("path", "conf/conf.json"));
+		ConfigStoreOptions envStore = new ConfigStoreOptions().setType("env");
 		
-		
-		ConfigStoreOptions envStore = new ConfigStoreOptions()
-				  .setType("env");
-		
-		ConfigRetriever retriever = ConfigRetriever.create(vertx, new ConfigRetrieverOptions().addStore(envStore));
+		ConfigRetriever retriever = ConfigRetriever.create(vertx,
+				new ConfigRetrieverOptions().addStore(fileStore).addStore(envStore));
 		retriever.getConfig(json -> {
 			JsonObject config = json.result();
-			System.out.println("config: "+config);
-			
+
 			// deploy EndpointService and BidderService
 			Promise<String> dbVerticleDeploymentPromise = Promise.promise();
 			vertx.deployVerticle(new EndpointService(), new DeploymentOptions().setConfig(config),

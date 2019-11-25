@@ -8,6 +8,7 @@ import com.rey.bidding.commons.CommonConstant;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
@@ -38,7 +39,8 @@ public class EndpointService extends AbstractVerticle {
 					hr.reply(res.result());
 				} else {
 					log.error("error with redis, return endpoints from configurations. Error: " + res.cause());
-					hr.reply(config().getJsonArray("endpoints"));
+					List<String> endpointsConf = Arrays.asList(config().getString(CommonConstant.ENDPOINTS_KEY).split(","));
+					hr.reply(new JsonArray(endpointsConf));
 				}
 			});
 		});
@@ -47,8 +49,8 @@ public class EndpointService extends AbstractVerticle {
 	private void initEndpoints(RedisOptions options) {
 		// clear redis
 		RedisClient.create(vertx, options).del(CommonConstant.ENDPOINTS_KEY, del -> {
-//			JsonArray endpointsConf = config().getJsonArray(CommonConstant.ENDPOINTS_KEY);
 			List<String> endpointsConf = Arrays.asList(config().getString(CommonConstant.ENDPOINTS_KEY).split(","));
+
 			// init redis with configurations
 			endpointsConf.forEach(endpoint -> {
 				RedisClient.create(vertx, options).sadd(CommonConstant.ENDPOINTS_KEY, endpoint.toString(), hr -> {

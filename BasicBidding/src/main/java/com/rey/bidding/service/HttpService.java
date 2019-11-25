@@ -30,7 +30,7 @@ public class HttpService extends AbstractVerticle {
 		HttpServer server = vertx.createHttpServer();
 		Router router = Router.router(vertx);
 
-		router.get("/endpoint").handler(this::endpointHandler);
+		router.get("/api/endpoint").handler(this::endpointHandler);
 		router.get("/:id").handler(this::bidHandler);
 		router.get("/*").handler(this::index);
 
@@ -52,9 +52,12 @@ public class HttpService extends AbstractVerticle {
 		// get params from http request
 		String id = context.request().getParam("id");
 		MultiMap queryParams = context.queryParams();
+		if (queryParams.isEmpty()) {
+			context.response().setStatusCode(400).end("invalid request");
+			return;
+		}
 
 		BidRequest request = new BidRequest(id, queryParams);
-
 		// send to bidder service
 		vertx.eventBus().request(CommonConstant.BID_BIDDER_ADDRESS, Json.encode(request), rh -> {
 			if (rh.succeeded()) {
@@ -64,20 +67,22 @@ public class HttpService extends AbstractVerticle {
 				BidReply reply = replies.stream().filter(r -> r != null).max(new Comparator<BidReply>() {
 					@Override
 					public int compare(BidReply o1, BidReply o2) {
-						int compareBid=o1.getBid().compareTo(o2.getBid());
+						int compareBid = o1.getBid().compareTo(o2.getBid());
 						// descending by bid
-						if(compareBid!=0) return compareBid;
+						if (compareBid != 0)
+							return compareBid;
 						// asending by content
-						return o2.getContent().compareTo(o1.getContent());		
+						return o2.getContent().compareTo(o1.getContent());
 					}
 				}).orElse(null);
+				// return auction result
 				if (reply != null) {
 					context.response().end(reply.toString());
 				} else {
 					context.response().setStatusCode(503).end("Bidder Service not available currently");
 				}
+
 			} else {
-				System.out.println(rh.cause());
 				log.error("error with bid request, error: " + rh.cause());
 				context.response().setStatusCode(500).end("Internal Error.");
 			}
@@ -95,8 +100,9 @@ public class HttpService extends AbstractVerticle {
 			}
 		});
 	}
-	
+
 	private void index(RoutingContext context) {
+		log.info("index");
 		context.response().end("read the docs!");
 	}
 }

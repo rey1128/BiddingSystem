@@ -49,9 +49,10 @@ public class BidderService extends AbstractVerticle {
 						.collect(Collectors.toList());
 
 				// send request to each endpoint
-				endpoints.stream().forEach(endpoint -> {
+				endpoints.forEach(endpoint -> {
 					log.info("send request to endpoint: " + endpoint);
 					WebClient wClient = WebClient.create(vertx);
+					
 					Single<HttpResponse<Buffer>> request = wClient.postAbs(endpoint)
 							.putHeader("Content-Type", "application/json").timeout(2000)
 							.rxSendBuffer(Buffer.buffer(Json.encode(bidRequest)));

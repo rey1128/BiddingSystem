@@ -9,5 +9,8 @@ class BiddingSpringApplicationTests {
 	@Test
 	void contextLoads() {
 	}
+	
+	
+	
 
 }

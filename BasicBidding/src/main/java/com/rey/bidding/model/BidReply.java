@@ -5,6 +5,14 @@ public class BidReply {
 	private Long bid;
 	private String content;
 
+	
+	public BidReply(String id, Long bid, String content) {
+		super();
+		this.id = id;
+		this.bid = bid;
+		this.content = content;
+	}
+
 	public String getId() {
 		return id;
 	}

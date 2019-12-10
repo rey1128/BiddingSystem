@@ -1,6 +1,5 @@
 package com.rey.bidding.service;
 
-import java.util.Comparator;
 import java.util.List;
 
 import com.google.common.reflect.TypeToken;
@@ -68,20 +67,11 @@ public class HttpService extends AbstractVerticle {
 				// auction
 				Gson gson = new Gson();
 				List<BidReply> replies = gson.fromJson(rh.result().body().toString(), BID_REPLY_LIST.getType());
-				BidReply reply = replies.stream().filter(r -> r != null).max(new Comparator<BidReply>() {
-					@Override
-					public int compare(BidReply o1, BidReply o2) {
-						int compareBid = o1.getBid().compareTo(o2.getBid());
-						// descending by bid
-						if (compareBid != 0)
-							return compareBid;
-						// asending by content
-						return o2.getContent().compareTo(o1.getContent());
-					}
-				}).orElse(null);
+				
+				BidReply winnderReply=AuctionService.getWinnerWithSecondPrice(replies);
 				// return auction result
-				if (reply != null) {
-					context.response().end(reply.toString());
+				if (winnderReply != null) {
+					context.response().end(winnderReply.toString());
 				} else {
 					context.response().setStatusCode(503).end("Bidder Service not available currently");
 				}
@@ -91,6 +81,8 @@ public class HttpService extends AbstractVerticle {
 			}
 		});
 	}
+	
+
 
 	private void endpointHandler(RoutingContext context) {
 		log.info("list endpoints");
